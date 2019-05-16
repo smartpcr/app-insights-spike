@@ -1,11 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Linq;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Channel;
 using Microsoft.ApplicationInsights.DependencyCollector;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.Azure.KeyVault;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,10 +13,17 @@ namespace AsyncLocalSpike
 {
     public static class AppInsightsBuilder
     {
-        public static IServiceCollection AddAppInsights(this IServiceCollection services, IConfiguration configuration)
+        public static IServiceCollection AddAppInsights(this IServiceCollection services, IConfiguration configuration, IKeyVaultClient kvClient)
         {
             var appInsightsConfig = TelemetryConfiguration.Active;
-            appInsightsConfig.InstrumentationKey = configuration["AppInsights:InstrumentationKey"];
+            var vaultSettings = new VaultSettings();
+            configuration.Bind("Vault", vaultSettings);
+            
+            var instrumentationKey = kvClient.GetSecretAsync(
+                $"https://{vaultSettings.Name}.vault.azure.net", 
+                configuration["AppInsights:InstrumentationKeySecret"])
+                .GetAwaiter().GetResult();
+            appInsightsConfig.InstrumentationKey = instrumentationKey.Value;
             appInsightsConfig.TelemetryInitializers.Add(new OperationCorrelationTelemetryInitializer());
             appInsightsConfig.TelemetryInitializers.Add(new HttpDependenciesParsingTelemetryInitializer());
             var serviceContext = new ServiceContext();

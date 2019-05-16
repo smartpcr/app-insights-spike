@@ -78,6 +78,9 @@ function EnsureServicePrincipal() {
             --certificate-permissions get list update delete `
             --secret-permissions get list set delete | Out-Null
     }
+
+    $sp = az ad sp list --display-name $SpName | ConvertFrom-Json
+    return $sp 
 }
 
 function InstallCert() {
@@ -113,9 +116,15 @@ function InstallCert() {
 }
 
 LoginToAzure -SubscriptionName $SubscriptionName | Out-Null
-EnsureServicePrincipal -SpName $SpName -VaultName $VaultName -VaultResourceGroupName $VaultResourceGroupName 
+$sp = EnsureServicePrincipal -SpName $SpName -VaultName $VaultName -VaultResourceGroupName $VaultResourceGroupName 
 $thumbprint = InstallCert -VaultName $VaultName -CertName "$SpName-cert"
 
 Write-Host "Copy thumbprint to appsettings.json file: `n" -ForegroundColor Yellow
-Write-Host $thumbprint -ForegroundColor Green
+$settings = @{
+    clientId             = $sp.appId 
+    clientCertThumbprint = $thumbprint
+    clientCertFile       = "$env:USERPROFILE\$spName-cert.pfx"
+} | ConvertTo-Json
+
+Write-Host $settings -ForegroundColor Green
 Write-Host "`n"
