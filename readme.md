@@ -9,4 +9,4 @@
 ```
 2. Run the application
 3. Explore logs in azure portal --> application insights --> search 
-![distributed trace](app-insights-trace.png)
+![distributed trace](https://github.com/smartpcr/app-insights-spike/blob/master/app-insights-trace.PNG)
