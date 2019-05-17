@@ -1,8 +1,13 @@
-﻿using System.Linq;
+﻿using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Channel;
+using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.ApplicationInsights.DependencyCollector;
 using Microsoft.ApplicationInsights.Extensibility;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Azure.KeyVault;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,9 +23,9 @@ namespace AsyncLocalSpike
             var appInsightsConfig = TelemetryConfiguration.Active;
             var vaultSettings = new VaultSettings();
             configuration.Bind("Vault", vaultSettings);
-            
+
             var instrumentationKey = kvClient.GetSecretAsync(
-                $"https://{vaultSettings.Name}.vault.azure.net", 
+                $"https://{vaultSettings.Name}.vault.azure.net",
                 configuration["AppInsights:InstrumentationKeySecret"])
                 .GetAwaiter().GetResult();
             appInsightsConfig.InstrumentationKey = instrumentationKey.Value;
@@ -83,6 +88,7 @@ namespace AsyncLocalSpike
             {
                 telemetry.Context.GlobalProperties["tags"] = string.Join(",", ServiceContext.Tags);
             }
+            telemetry.Context.Operation.Id = CorrelationManager.GetOperationId();
         }
     }
 
@@ -91,5 +97,60 @@ namespace AsyncLocalSpike
         public string Name { get; set; }
         public string Version { get; set; }
         public string[] Tags { get; set; }
+    }
+
+    public static class CorrelationManager
+    {
+        private static AsyncLocal<string> currentOperationId = new AsyncLocal<string>();
+
+        public static void SetOperationId(string operationId)
+        {
+            currentOperationId.Value = operationId;
+        }
+
+        public static string GetOperationId()
+        {
+            return currentOperationId.Value ?? Guid.NewGuid().ToString();
+        }
+
+        private static string GetOrCreateOperationIdFromHttpContext(IHttpContextAccessor contextAccessor)
+        {
+            var context = contextAccessor.HttpContext;
+            if (context == null)
+            {
+                return null;
+            }
+
+            if (Activity.Current == null)
+            {
+                var formerActivity = contextAccessor.HttpContext?.Items["__activity__"] as Activity;
+                if (formerActivity != null)
+                {
+                    var newActvity = new Activity(formerActivity.OperationName);
+                    newActvity.SetStartTime(formerActivity.StartTimeUtc);
+                    newActvity.SetParentId(formerActivity.ParentId);
+                    foreach (var baggage in formerActivity.Baggage)
+                    {
+                        newActvity.AddBaggage(baggage.Key, baggage.Value);
+                    }
+
+                    newActvity.Start();
+
+                    var requestTelemetry = (RequestTelemetry)context?.Items["Microsoft.ApplicationInsights.RequestTelemetry"];
+                    if (requestTelemetry != null)
+                    {
+                        requestTelemetry.Context.Operation.Id = newActvity.RootId;
+                        requestTelemetry.Context.Operation.ParentId = newActvity.ParentId;
+                        requestTelemetry.Id = newActvity.Id;
+                    }
+
+                    return newActvity.Id;
+                }
+
+                return formerActivity.Id;
+            }
+
+            return Activity.Current.Id;
+        }
     }
 }

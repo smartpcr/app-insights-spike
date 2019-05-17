@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace AsyncLocalSpike
 {
@@ -36,21 +37,21 @@ namespace AsyncLocalSpike
             return builder.ToString();
         }
 
-        public async Task Execute()
+        public async Task Execute(ILogger<CallTree> logger)
         {
             if (IsAsynchronous)
             {
-                await ExecuteAsync();
+                await ExecuteAsync(logger);
             }
             else
             {
-                ExecuteSync();
+                ExecuteSync(logger);
             }
         }
 
-        private async Task ExecuteAsync()
+        private async Task ExecuteAsync(ILogger<CallTree> logger)
         {
-            Console.WriteLine($"Entering '{this}'");
+            logger.LogInformation($"Entering '{this}'");
             await Task.Delay(new Random().Next(1000));
             var tasks = new List<Task>();
 
@@ -58,43 +59,43 @@ namespace AsyncLocalSpike
             {
                 foreach (var child in Children.Where(c => c.IsAsynchronous))
                 { 
-                    tasks.Add(child.ExecuteAsync());
+                    tasks.Add(child.ExecuteAsync(logger));
                 }
 
                 foreach (var child in Children.Where(c => !c.IsAsynchronous))
                 {
-                    child.ExecuteSync();
+                    child.ExecuteSync(logger);
                 }
 
             }
 
             await Task.WhenAll(tasks.ToArray());
 
-            Console.WriteLine($"Exiting '{this}'");
+            logger.LogInformation($"Exiting '{this}'");
         }
 
-        private void ExecuteSync()
+        private void ExecuteSync(ILogger<CallTree> logger)
         {
-            Console.WriteLine($"Entering '{this}'");
+            logger.LogInformation($"Entering '{this}'");
             var tasks = new List<Task>();
 
             if (Children?.Count > 0)
             {
                 foreach (var child in Children.Where(c => c.IsAsynchronous))
                 { 
-                    tasks.Add(child.ExecuteAsync());
+                    tasks.Add(child.ExecuteAsync(logger));
                 }
 
                 foreach (var child in Children.Where(c => !c.IsAsynchronous))
                 {
-                    child.ExecuteSync();
+                    child.ExecuteSync(logger);
                 }
 
             }
 
             Task.WaitAll(tasks.ToArray());
 
-            Console.WriteLine($"Exiting '{this}'");
+            logger.LogInformation($"Exiting '{this}'");
         }
 
         /// <summary>

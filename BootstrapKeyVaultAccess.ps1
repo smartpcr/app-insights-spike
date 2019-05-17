@@ -123,7 +123,7 @@ Write-Host "Copy thumbprint to appsettings.json file: `n" -ForegroundColor Yello
 $settings = @{
     clientId             = $sp.appId 
     clientCertThumbprint = $thumbprint
-    clientCertFile       = "$env:USERPROFILE\$spName-cert.pfx"
+    clientCertFile       = "$env:USERPROFILE\.secrets\$spName-cert.pfx"
 } | ConvertTo-Json
 
 Write-Host $settings -ForegroundColor Green
