@@ -1,18 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.DataContracts;
 using Microsoft.Extensions.Logging;
 
 namespace AsyncLocalSpike
 {
-    public class CallTree
+    public interface ICallContext
+    {
+        AsyncLocal<Activity> CallActivity { get; set; }
+        string OperationName { get; }
+    }
+
+    public class CallTree : ICallContext
     {
         public string Name { get; set; }
         public CallTree Parent { get; set; }
         public bool IsAsynchronous { get; set; }
         public List<CallTree> Children { get; set; }
+        public AsyncLocal<Activity> CallActivity { get; set; }
+        public string OperationName => ToString();
 
         public CallTree(string name) : this(name, null)
         {
@@ -24,6 +36,7 @@ namespace AsyncLocalSpike
             Parent = parent;
             IsAsynchronous = false;
             Children = new List<CallTree>();
+            CallActivity = new AsyncLocal<Activity>();
         }
 
         public override string ToString()
@@ -37,65 +50,74 @@ namespace AsyncLocalSpike
             return builder.ToString();
         }
 
-        public async Task Execute(ILogger<CallTree> logger)
+        public async Task Execute(TelemetryClient telemetry, ILogger<CallTree> logger)
         {
-            if (IsAsynchronous)
+            using (var operation = this.StartOperation(telemetry))
             {
-                await ExecuteAsync(logger);
-            }
-            else
-            {
-                ExecuteSync(logger);
+                if (IsAsynchronous)
+                {
+                    await ExecuteAsync(telemetry, logger);
+                }
+                else
+                {
+                    ExecuteSync(telemetry, logger);
+                }
             }
         }
 
-        private async Task ExecuteAsync(ILogger<CallTree> logger)
+        private async Task ExecuteAsync(TelemetryClient telemetry, ILogger<CallTree> logger)
         {
-            logger.LogInformation($"Entering '{this}'");
-            await Task.Delay(new Random().Next(1000));
-            var tasks = new List<Task>();
-
-            if (Children?.Count > 0)
+            using (var operation = this.StartOperation(telemetry))
             {
-                foreach (var child in Children.Where(c => c.IsAsynchronous))
-                { 
-                    tasks.Add(child.ExecuteAsync(logger));
-                }
+                logger.LogInformation($"Entering '{this}'");
+                await Task.Delay(new Random().Next(1000));
+                var tasks = new List<Task>();
 
-                foreach (var child in Children.Where(c => !c.IsAsynchronous))
+                if (Children?.Count > 0)
                 {
-                    child.ExecuteSync(logger);
+                    foreach (var child in Children.Where(c => c.IsAsynchronous))
+                    {
+                        tasks.Add(child.ExecuteAsync(telemetry, logger));
+                    }
+
+                    foreach (var child in Children.Where(c => !c.IsAsynchronous))
+                    {
+                        child.ExecuteSync(telemetry, logger);
+                    }
+
                 }
 
+                await Task.WhenAll(tasks.ToArray());
+
+                logger.LogInformation($"Exiting '{this}'");
             }
-
-            await Task.WhenAll(tasks.ToArray());
-
-            logger.LogInformation($"Exiting '{this}'");
         }
 
-        private void ExecuteSync(ILogger<CallTree> logger)
+        private void ExecuteSync(TelemetryClient telemetry, ILogger<CallTree> logger)
         {
-            logger.LogInformation($"Entering '{this}'");
-            var tasks = new List<Task>();
-
-            if (Children?.Count > 0)
+            using (var operation = this.StartOperation(telemetry))
             {
-                foreach (var child in Children.Where(c => c.IsAsynchronous))
-                { 
-                    tasks.Add(child.ExecuteAsync(logger));
-                }
+                logger.LogInformation($"Entering '{this}'");
+                var tasks = new List<Task>();
 
-                foreach (var child in Children.Where(c => !c.IsAsynchronous))
+                if (Children?.Count > 0)
                 {
-                    child.ExecuteSync(logger);
+                    foreach (var child in Children.Where(c => c.IsAsynchronous))
+                    {
+                        tasks.Add(child.ExecuteAsync(telemetry, logger));
+                    }
+
+                    foreach (var child in Children.Where(c => !c.IsAsynchronous))
+                    {
+                        child.ExecuteSync(telemetry, logger);
+                    }
+
                 }
 
+                Task.WaitAll(tasks.ToArray());
+
+                logger.LogInformation($"Exiting '{this}'");
             }
-
-            Task.WaitAll(tasks.ToArray());
-
-            logger.LogInformation($"Exiting '{this}'");
         }
 
         /// <summary>
@@ -130,5 +152,7 @@ namespace AsyncLocalSpike
 
             return root;
         }
+
+        
     }
 }
