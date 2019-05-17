@@ -28,11 +28,7 @@ namespace AsyncLocalSpike
             call.CallActivity.Value = activity;
             activity.Start();
 
-            if (activity.Parent == null)
-            {
-                return new OperationScope(telemetry, telemetry.StartOperation<RequestTelemetry>(activity));
-            }
-            return new OperationScope(telemetry, telemetry.StartOperation<DependencyTelemetry>(activity));
+            return new OperationScope(telemetry, activity);
         }
     }
 
@@ -42,16 +38,22 @@ namespace AsyncLocalSpike
         private IOperationHolder<RequestTelemetry> _requestOperation;
         private IOperationHolder<DependencyTelemetry> _dependencyOperation;
 
-        public OperationScope(TelemetryClient telemetry, IOperationHolder<RequestTelemetry> requestOperation)
+        public OperationScope(TelemetryClient telemetry, Activity activity)
         {
-            _telemetry = telemetry;
-            _requestOperation = requestOperation;
-        }
+            _telemetry = telemetry ?? throw new ArgumentNullException(nameof(telemetry));
+            if (activity==null)
+            {
+                throw new ArgumentNullException(nameof(activity));
+            }
 
-        public OperationScope(TelemetryClient telemetry, IOperationHolder<DependencyTelemetry> dependencyOperation)
-        {
-            _telemetry = telemetry;
-            _dependencyOperation = dependencyOperation;
+            if (activity.Parent == null)
+            {
+                _requestOperation = _telemetry.StartOperation<RequestTelemetry>(activity);
+            }
+            else
+            {
+                _dependencyOperation = _telemetry.StartOperation<DependencyTelemetry>(activity);
+            }
         }
 
         public void Dispose()
