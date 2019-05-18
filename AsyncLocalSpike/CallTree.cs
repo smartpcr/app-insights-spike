@@ -60,7 +60,7 @@ namespace AsyncLocalSpike
         {
             using (var operation = this.StartOperation(telemetry, this.ToString()))
             {
-                logger.LogInformation($"Entering '{this}'");
+                logger.LogInformation($"Entering '{operation.OperationName}'");
                 await Task.Delay(new Random().Next(1000));
                 var tasks = new List<Task>();
 
@@ -80,7 +80,7 @@ namespace AsyncLocalSpike
 
                 await Task.WhenAll(tasks.ToArray());
 
-                logger.LogInformation($"Exiting '{this}'");
+                logger.LogInformation($"Exiting '{operation.OperationName}'");
             }
         }
 
@@ -88,7 +88,7 @@ namespace AsyncLocalSpike
         {
             using (var operation = this.StartOperation(telemetry, this.ToString()))
             {
-                logger.LogInformation($"Entering '{this}'");
+                logger.LogInformation($"Entering '{operation.OperationName}'");
                 var tasks = new List<Task>();
 
                 if (Children?.Count > 0)
@@ -107,7 +107,7 @@ namespace AsyncLocalSpike
 
                 Task.WaitAll(tasks.ToArray());
 
-                logger.LogInformation($"Exiting '{this}'");
+                logger.LogInformation($"Exiting '{operation.OperationName}'");
             }
         }
 

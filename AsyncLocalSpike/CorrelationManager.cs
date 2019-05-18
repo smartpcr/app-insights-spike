@@ -40,6 +40,7 @@ namespace AsyncLocalSpike
         private readonly TelemetryClient _telemetry;
         private IOperationHolder<RequestTelemetry> _requestOperation;
         private IOperationHolder<DependencyTelemetry> _dependencyOperation;
+        public string OperationName { get; private set; }
 
         public OperationScope(TelemetryClient telemetry, Activity activity)
         {
@@ -49,7 +50,8 @@ namespace AsyncLocalSpike
                 throw new ArgumentNullException(nameof(activity));
             }
 
-            if (activity.Parent == null)
+            OperationName = activity.OperationName;
+            if (activity.ParentId == null)
             {
                 _requestOperation = _telemetry.StartOperation<RequestTelemetry>(activity);
             }
