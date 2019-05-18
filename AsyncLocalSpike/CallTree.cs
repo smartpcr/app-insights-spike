@@ -11,20 +11,12 @@ using Microsoft.Extensions.Logging;
 
 namespace AsyncLocalSpike
 {
-    public interface ICallContext
-    {
-        AsyncLocal<Activity> CallActivity { get; set; }
-        string OperationName { get; }
-    }
-
-    public class CallTree : ICallContext
+    public class CallTree 
     {
         public string Name { get; set; }
         public CallTree Parent { get; set; }
         public bool IsAsynchronous { get; set; }
         public List<CallTree> Children { get; set; }
-        public AsyncLocal<Activity> CallActivity { get; set; }
-        public string OperationName => ToString();
 
         public CallTree(string name) : this(name, null)
         {
@@ -36,7 +28,6 @@ namespace AsyncLocalSpike
             Parent = parent;
             IsAsynchronous = false;
             Children = new List<CallTree>();
-            CallActivity = new AsyncLocal<Activity>();
         }
 
         public override string ToString()
@@ -52,7 +43,7 @@ namespace AsyncLocalSpike
 
         public async Task Execute(TelemetryClient telemetry, ILogger<CallTree> logger)
         {
-            using (var operation = this.StartOperation(telemetry))
+            using (var operation = this.StartOperation(telemetry, this.ToString()))
             {
                 if (IsAsynchronous)
                 {
@@ -67,7 +58,7 @@ namespace AsyncLocalSpike
 
         private async Task ExecuteAsync(TelemetryClient telemetry, ILogger<CallTree> logger)
         {
-            using (var operation = this.StartOperation(telemetry))
+            using (var operation = this.StartOperation(telemetry, this.ToString()))
             {
                 logger.LogInformation($"Entering '{this}'");
                 await Task.Delay(new Random().Next(1000));
@@ -95,7 +86,7 @@ namespace AsyncLocalSpike
 
         private void ExecuteSync(TelemetryClient telemetry, ILogger<CallTree> logger)
         {
-            using (var operation = this.StartOperation(telemetry))
+            using (var operation = this.StartOperation(telemetry, this.ToString()))
             {
                 logger.LogInformation($"Entering '{this}'");
                 var tasks = new List<Task>();

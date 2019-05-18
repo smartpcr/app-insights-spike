@@ -59,7 +59,6 @@ namespace AsyncLocalSpike
                 var log = new LoggerConfiguration()
                     .MinimumLevel.Information()
                     .Enrich.FromLogContext()
-                    .ReadFrom.Configuration(configuration)
                     .WriteTo.Console()
                     .WriteTo.ApplicationInsights(TelemetryConfiguration.Active, TelemetryConverter.Traces)
                     .CreateLogger();

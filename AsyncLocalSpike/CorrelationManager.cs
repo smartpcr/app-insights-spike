@@ -11,21 +11,24 @@ namespace AsyncLocalSpike
 {
     using System;
     using System.Diagnostics;
+    using System.Threading;
     using Microsoft.ApplicationInsights;
     using Microsoft.ApplicationInsights.DataContracts;
     using Microsoft.ApplicationInsights.Extensibility;
 
     public static class CorrelationManager
     {
-        public static OperationScope StartOperation(this ICallContext call, TelemetryClient telemetry)
+        private static AsyncLocal<Activity> _callActivity = new AsyncLocal<Activity>();
+
+        public static OperationScope StartOperation(this object caller, TelemetryClient telemetry, string operationName)
         {
-            var activity = new Activity(call.OperationName);
-            if (call.CallActivity.Value != null)
+            var activity = new Activity(operationName);
+            if (_callActivity.Value != null)
             {
-                var parentActivity = call.CallActivity.Value;
+                var parentActivity = _callActivity.Value;
                 activity.SetParentId(parentActivity.Id);
             }
-            call.CallActivity.Value = activity;
+            _callActivity.Value = activity;
             activity.Start();
 
             return new OperationScope(telemetry, activity);
